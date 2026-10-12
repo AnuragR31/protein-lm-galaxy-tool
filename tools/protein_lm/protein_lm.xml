@@ -622,59 +622,25 @@
     <help><![CDATA[
 **What it does**
 
-Runs protein language models (ESM-2, ProtBERT, or ProtT5 -- auto-detected from the
-model's config.json, never guessed from a name) in three modes:
-
-- **Extract embeddings**: per-residue (H5) and/or per-protein mean-pooled (TSV) embeddings from a FASTA file.
-- **Train a classifier/regressor on embeddings**: a scikit-learn model trained on mean-pooled embeddings, evaluated via an internal train/test split.
-- **LoRA fine-tune the encoder**: fine-tunes the encoder itself with a LoRA or AdaLoRA adapter (via `peft <https://github.com/huggingface/peft>`_) plus a linear classification/regression head.
-
-**Evaluation (both Train a classifier/regressor on embeddings, and LoRA fine-tune the encoder)**
-
-Both modes take a single FASTA + labels table -- you never need to pre-split your data yourself. The tool embeds everything once, then splits it internally using **Fraction held out for testing/validation** (e.g. 0.2 = 20% held out, 80% train, stratified by class for classification). Change **Random seed for the split** to get a different split of the same data. Always produces predictions, metrics, and a plot.
-
-Classification requires every class to have at least 2 samples, so it can appear on both sides of the split; with a class that has only 1 sample, either drop it or add more data for that class.
-
-**Adapter method (LoRA fine-tune the encoder)**
-
-- **LoRA**: a fixed-rank adapter (**LoRA rank (r)**) applied to the chosen layers' attention query/value projections.
-- **AdaLoRA**: starts at a higher rank (**Initial rank**) and adaptively prunes down to a lower **Target rank** over the course of training, based on each weight's measured importance -- can match LoRA's quality with fewer effective parameters, at the cost of a slightly more involved training step.
-
-**Apply the adapter to**
-
-- **All transformer layers**: every layer gets an adapter -- the most capacity, most trainable parameters.
-- **The last N layers**: only the final N layers, e.g. for a lighter-weight adapter when the earlier layers' general-purpose representations don't need adjusting.
-- **Custom layer indices**: any specific 0-indexed layers (e.g. ``0,1,2``) -- check your model's layer count in its ``config.json`` (``num_hidden_layers`` for ESM-2/ProtBERT, ``num_layers`` for ProtT5).
+Runs a protein language model (ESM-2, ProtBERT, or ProtT5 -- auto-detected) in one of three modes: extract embeddings, train a classifier/regressor on embeddings, or LoRA/AdaLoRA fine-tune the encoder.
 
 **Model source**
 
-- **Use an installed model**: choose from models your Galaxy administrator has registered in the shared ``huggingface`` data table (tagged ``protein-lm``).
-- **Upload a model archive**: a ``.tgz``/``.tar`` archive of a local Hugging Face model folder (``config.json``, tokenizer files, and **safetensors** weights -- legacy ``pytorch_model.bin`` checkpoints are rejected, since loading an untrusted pickle is a code-execution risk).
-
-**Sequence length**
-
-Sequences longer than the chosen maximum length are truncated or skipped (with a warning), per your choice -- never silently dropped without a message.
+Select a model your Galaxy administrator has installed, or upload your own model archive (``.tgz``/``.tar`` of a Hugging Face model folder with safetensors weights).
 
 **Per-residue (H5) output**
 
-One dataset per sequence, keyed by a sanitised version of its FASTA id (``/`` and other non-alphanumeric characters replaced with ``_``); the original id is kept as the dataset's ``original_id`` attribute. Read it in Python with::
+One dataset per sequence, keyed by a sanitised version of its FASTA id; the original id is kept as the dataset's ``original_id`` attribute::
 
     import h5py
     with h5py.File("output_embeddings.h5") as f:
         for key in f:
-            residue_embeddings = f[key][:]          # shape (seq_len, hidden_size)
+            residue_embeddings = f[key][:]
             original_id = f[key].attrs["original_id"]
 
 **GPU**
 
-A GPU is used automatically when available; otherwise the tool runs on CPU. Note that on a Galaxy server using the automatically built BioContainers image, the container is typically built without a GPU, so it will run on CPU even on a GPU-equipped server -- ask your Galaxy admin how GPU access is configured for this tool on your instance.
-
-**Choosing a model**
-
-- **ESM-2** (facebook/esm2_*): a general-purpose protein language model trained on UniRef50.
-- **ProtBERT** (Rostlab/prot_bert): BERT-style, trained on UniRef100/BFD.
-- **ProtT5** (Rostlab/prot_t5_xl_*): T5 encoder, often strong on structure/stability-related tasks.
-
+Used automatically when available, otherwise runs on CPU.
     ]]></help>
     <citations>
         <citation type="doi">10.1126/science.ade2574</citation>
